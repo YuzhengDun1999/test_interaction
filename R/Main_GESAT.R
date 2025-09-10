@@ -42,12 +42,12 @@ GESAT <- function(Z, Y, E, X=NULL, type="davies",
   if(nrow(Z)!= nrow(Y)) stop("Dimensions of Z and Y don't match.")
   if(is.null(X)==FALSE){
     if(nrow(X)!= nrow(Y)) stop("Dimensions of X and Y don't match.")
-    if(class(X)!= "matrix") stop("X is not a matrix.")
+    if(!inherits(X, "matrix")) stop("X is not a matrix.")
   }
-  if(class(Z)!= "matrix") stop("Z is not a matrix.")
-  if(class(E)!= "matrix") stop("E is not a matrix.")
-  if(class(Y)!= "matrix") stop("Y is not a matrix.")
-
+  if(!inherits(Z, "matrix")) stop("Z is not a matrix.")
+  if(!inherits(E, "matrix")) stop("E is not a matrix.")
+  if(!inherits(Y, "matrix")) stop("Y is not a matrix.")
+  
   #----------------------------------------- added on Oct 14, 2015 (start)
   if(is_check_genotype==FALSE & is_dosage== FALSE){
     if(sum(is.na(Z))!= 0) stop("Z cannot have any missing values if is_check_genotype = FALSE and is_dosage=FALSE.")
