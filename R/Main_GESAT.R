@@ -25,10 +25,13 @@
 # Last Edited: January 27, 2014
 # v0.6 onwards allow for binary outcome
 
-GESAT <- function(Z, Y, E, X=NULL, type="davies",
+GESAT <- function(Z, Y, E, X=NULL, ridge.penalty.factor=rep(1, ncol(Z)), lasso.select=F, lasso.criterion="lambda.min", lasso.ols=F, ols=F, type="davies",
                   lower=1e-20, upper=sqrt(nrow(Y))/log(nrow(Y)), nintervals=5, plotGCV=FALSE, plotfile=NA, scale.Z=TRUE, weights.Z=NULL, weights.V=NULL,
                   out_type="C", impute.method = "fixed", is_check_genotype=TRUE, is_dosage=FALSE, missing_cutoff=0.15, SetID=NULL){
-
+  # Z: genotype data
+  # Y: outcome
+  # E: environment variables
+  # X: age, gender, covariates, no intercept
   #-------------------------------------
   # check outcome type
   if(out_type != "C" && out_type != "D"){
@@ -42,11 +45,11 @@ GESAT <- function(Z, Y, E, X=NULL, type="davies",
   if(nrow(Z)!= nrow(Y)) stop("Dimensions of Z and Y don't match.")
   if(is.null(X)==FALSE){
     if(nrow(X)!= nrow(Y)) stop("Dimensions of X and Y don't match.")
-    if(class(X)!= "matrix") stop("X is not a matrix.")
+    if(!inherits(X, "matrix")) stop("X is not a matrix.")
   }
-  if(class(Z)!= "matrix") stop("Z is not a matrix.")
-  if(class(E)!= "matrix") stop("E is not a matrix.")
-  if(class(Y)!= "matrix") stop("Y is not a matrix.")
+  if(!inherits(Z, "matrix")) stop("Z is not a matrix.")
+  if(!inherits(E, "matrix")) stop("E is not a matrix.")
+  if(!inherits(Y, "matrix")) stop("Y is not a matrix.")
 
   #----------------------------------------- added on Oct 14, 2015 (start)
   if(is_check_genotype==FALSE & is_dosage== FALSE){
@@ -195,8 +198,8 @@ GESAT <- function(Z, Y, E, X=NULL, type="davies",
   # Run GESAT
   Xtilde <- as.matrix(cbind(X,E))
   if(out_type == "C"){
-    iSKAT.out <- GxEscore.linear.GCV(Y=Y, Xtilde=Xtilde, Z=Z, V=V, type=type,
-                                     lower=lower, upper=upper, nintervals=nintervals, plotGCV=plotGCV, plotfile=plotfile, scale.Z=scale.Z, 				weights.Z=weights.Z, weights.V=NULL)
+    iSKAT.out <- GxEscore.linear.GCV(Y=Y, Xtilde=Xtilde, Z=Z, V=V, ridge.penalty.factor=ridge.penalty.factor, lasso.select=lasso.select, lasso.criterion=lasso.criterion, lasso.ols=lasso.ols, ols=ols, type=type,
+                                     lower=lower, upper=upper, nintervals=nintervals, plotGCV=plotGCV, plotfile=plotfile, scale.Z=scale.Z, weights.Z=weights.Z, weights.V=NULL)
   }
 
   if(out_type == "D"){

@@ -63,7 +63,7 @@
 # START: Functions specific to linear
 #
 #--------------------------------------------------------------------------------------------------------------
-GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
+GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, ncol(Z)), lasso.select=F, lasso.criterion="lambda.min", lasso.ols=F, ols=F, type="davies",
                                 lower=1e-20, upper=sqrt(nrow(Y))/log(nrow(Y)), nintervals=5, plotGCV=F, plotfile=NA, scale.Z=T, weights.Z=NULL, weights.V=NULL){
 
   # Y (n x 1 matrix):  continuous outcome variable
@@ -71,6 +71,9 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
   # Do NOT include intercept as part of Xtilde (Y is centered in ridge, so no intercept needed)
   # Z (n x p matrix):  genetic covariates that are adjusted for (penalized)
   # V (n x p matrix): GxE terms that we are testing
+  # ridge.penalty.factor: Separate ridge penalty factors can be applied to each coefficient. NaN means excluding the variables
+  # lasso.criterion: How to select best lasso coefficients. "lambda.1se" or "lambda.min"
+  # lasso.ols: refit OLS after using lasso select variables.
   # n = no. of samples
   # lower cannot be zero
   # to use a fixed lambda, set nintervals=1
@@ -82,26 +85,47 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
   if(type!="davies"&&type!="liu") stop("type has to be either davies or liu")
   if(lower<=0|upper<=0|lower>upper) stop("lower/upper has to be >0, lower<=upper")
   if(scale.Z==T & is.null(weights.Z)==F) print("Warning: since scale.Z=T, weights.Z are ignored! To use weights as weights.Z, set scale.Z=F")
-
+  if(length(ridge.penalty.factor)!= ncol(Z)) stop("dimensions of penalty factors and Z don't match")
+  
   n <- drop(nrow(Y))
 
   #---------------------------------------------------------------------------
   # fit ridge regression model under the null
   # Note that all variables should always be centered as otherwise scaling by scale() will be incorrect
   #---------------------------------------------------------------------------
+  if (ols | lasso.ols){
+    upper = 0
+    nintervals = 1
+  }
   if(nintervals>1){
     if(is.null(weights.Z)==F & scale.Z==F){
       Z <- t(t(Z) * (weights.Z))
     }
     Z <-  scale(Z, center=T, scale=scale.Z)
-    lambdahat <- chooseridge.linear(Y, Xtilde, Z, lambdastart=lower, lambdaend=upper,
+    if (lasso.select){
+      library(glmnet)
+      lasso.fit = cv.glmnet(x = cbind(Xtilde, Z), y = Y, family = c("gaussian"),
+                            alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
+      beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
+      ridge.penalty.factor = rep(1, ncol(Z))
+      ridge.penalty.factor[which(beta_lasso != 0)] = 0
+    }
+    lambdahat <- chooseridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=lower, lambdaend=upper,
                                     intervals=nintervals, plot=plotGCV, file=plotfile,
                                     center.Z=F, scale.Z=F, weights.Z=NULL)
-    ridgemodel <- ridge.linear(Y, Xtilde, Z, lambda = lambdahat, center.Z=F, scale.Z=F, weights.Z=NULL)
+    ridgemodel <- ridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda = lambdahat, center.Z=F, scale.Z=F, weights.Z=NULL)
     Yhat <- ridgemodel$Yhat
   }else{
+    if (lasso.ols) {
+      library(glmnet)
+      lasso.fit = cv.glmnet(x = cbind(Xtilde, Z), y = Y, family = c("gaussian"),
+                            alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
+      beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
+      ridge.penalty.factor = rep(1, ncol(Z))
+      ridge.penalty.factor[which(beta_lasso == 0)] = NaN
+    }
     lambdahat <- upper
-    ridgemodel <- ridge.linear(Y, Xtilde, Z, lambda = lambdahat, center.Z=T, scale.Z=scale.Z, weights.Z=weights.Z)
+    ridgemodel <- ridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda = lambdahat, center.Z=T, scale.Z=scale.Z, weights.Z=weights.Z, lasso.ols=lasso.ols)
     Yhat <- ridgemodel$Yhat
   }
   #---------------------------------------------------------------------------
@@ -133,20 +157,6 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
   # p-value from non-central chi-square approximation
   #---------------------------------------------------------------------------
   if(type=="liu"){
-
-    #sigmahat <- drop(varhat)*diag(n)
-    #A <- R %*% sigmahat
-    #A2 <- A %*% A
-    #kappa1 <-  mtrace(A)
-    #kappa2 <-  2*mtrace(A2)
-    #kappa3 <-  8*sum(A * t(A2))
-    #kappa4 <-  48*sum(A2 * t(A2))
-
-    # kappa1 <-  mtrace(R %*% sigmahat)
-    # kappa2 <-  2*mtrace(R %*% sigmahat %*% R %*% sigmahat)
-    # kappa3 <-  8*mtrace(R %*% sigmahat %*% R %*% sigmahat %*% R %*% sigmahat)
-    # kappa4 <-  48*mtrace(R %*% sigmahat %*% R %*% sigmahat %*% R %*% sigmahat %*% R %*% sigmahat)
-
     M4 <- M3 %*% M3
     kappa1 <-  mtrace(M3)	          # = tr(M3)
     kappa2 <-  2*mtrace(M4)           # = 2 tr(M3 M3) = 2 tr(M4)
@@ -163,20 +173,11 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
     #---------------------------------------------------------------------------
     # p-value from davies
     #---------------------------------------------------------------------------
-    #M3 <- drop(varhat)*R
     daviesout <- Get_PValue_GESAT(M3, Q)
     pvalue <- daviesout$p.value
     Is_converge <- daviesout$is_converge
 
     if(Is_converge<=0){
-      #sigmahat <- drop(varhat)*diag(n)
-      #A <- R %*% sigmahat
-      #A2 <- A %*% A
-      #kappa1 <-  mtrace(A)
-      #kappa2 <-  2*mtrace(A2)
-      #kappa3 <-  8*sum(A * t(A2))
-      #kappa4 <-  48*sum(A2 * t(A2))
-
       M4 <- M3 %*% M3
       kappa1 <-  mtrace(M3)             # = tr(M3)
       kappa2 <-  2*mtrace(M4)           # = 2 tr(M3 M3) = 2 tr(M4)
@@ -194,7 +195,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
 }
 
 
-ridge.linear <- function(Y, Xtilde, Z, lambda=0, center.Z=T, scale.Z=T, weights.Z=NULL){
+ridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambda=0, center.Z=T, scale.Z=T, weights.Z=NULL, lasso.ols=F){
   # modified in v7, intercept is included, Y is not centered
   # modified in v5 to return W, invW instead of H and GCV, matrix computations made faster,
   # add 3 arguments center.Z=T, scale.Z=T, weights.Z=NULL
@@ -213,42 +214,34 @@ ridge.linear <- function(Y, Xtilde, Z, lambda=0, center.Z=T, scale.Z=T, weights.
   #if(scale.Z==T & is.null(weights.Z)==F) print("Warning: since scale.Z=T, weights.Z are ignored! To use weights as weights.Z, set scale.Z=F")
 
   n <- nrow(Y)
+  if (any(is.nan(ridge.penalty.factor))) {
+    Z = Z[, -(which(is.nan(ridge.penalty.factor))), drop = FALSE]
+    ridge.penalty.factor = ridge.penalty.factor[-which(is.nan(ridge.penalty.factor))]
+  }
   qtilde <- ncol(Xtilde) + 1 		 # +1 is for intercept, new in v7
   p <- ncol(Z)
   if(p==1){
-    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), matrix(lambda)))
+    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), matrix(lambda * drop(ridge.penalty.factor))))
   }else{
-    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), diag(rep(lambda,p))))
+    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), diag(rep(lambda, p) * ridge.penalty.factor)))
   }
-
+  
   if(is.null(weights.Z)==F & scale.Z==F){
     Z <- t(t(Z) * (weights.Z))
   }
   W <- cbind(rep(1,n), scale(Xtilde), scale(Z, center=center.Z, scale=scale.Z)) # doesn't matter if Xtilde is scaled or not
-  #Ys <- Y - mean(Y)
 
-  #inverse <- solve(t(W) %*% W + temp)
-  #invW <- inverse %*% t(W)
   transW <- t(W)
   invW <- solve(transW %*% W + temp, transW) #invW <- solve(t(W) %*% W + temp, t(W))
-  #thetahat <- inverse %*% t(W) %*% Ys
-  #thetahat <- invW %*% Ys
   thetahat <- invW %*% Y
 
   Yhat <- W %*% thetahat
-  #Yshat <- W %*% thetahat
-  #Yhat <- Yshat + mean(Y)
-  #H <-  W %*% inverse %*% t(W)
-  #GCV <- sum((Ys-Yshat)^2)/(n*(1-sum(diag(H))/n)^2)
-  #equivH <- invW %*% W          # tr(H) = tr(equivH)
-  #GCV <- sum((Ys-Yshat)^2)/(n*(1-sum(diag(equivH))/n)^2)
-
+  
   return(list(lambda=lambda, thetahat=thetahat, Yhat = Yhat, W=W, invW=invW))
-  #return(list(lambda=lambda, thetahat=thetahat, Yhat = Yhat, inverse=inverse, W=W, invW=invW))
 }
 
 
-ridge.select.linear <- function(Y, Xtilde, Z, lambda=0, center.Z=T, scale.Z=T, weights.Z=NULL){
+ridge.select.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambda=0, center.Z=T, scale.Z=T, weights.Z=NULL){
   # modified in v7 to include intercept, but not center Y
   # modified in v6 to add a try() function to matrix inversion
   # modified in v5 to add 3 arguments center.Z=T scale.Z=T, weights.Z=NULL and matrix computations made faster
@@ -270,9 +263,9 @@ ridge.select.linear <- function(Y, Xtilde, Z, lambda=0, center.Z=T, scale.Z=T, w
   qtilde <- ncol(Xtilde) + 1			 # +1 is for intercept, new in v7
   p <- ncol(Z)
   if(p==1){
-    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), matrix(lambda)))
+    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), matrix(lambda * drop(ridge.penalty.factor))))
   }else{
-    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), diag(rep(lambda,p))))
+    temp <- rbind(matrix(0, nrow=qtilde,ncol=qtilde+p), cbind(matrix(0, nrow=p, ncol=qtilde), diag(rep(lambda, p) * ridge.penalty.factor)))
   }
   if(is.null(weights.Z)==F & scale.Z==F){
     Z <- t(t(Z) * (weights.Z))
@@ -287,17 +280,10 @@ ridge.select.linear <- function(Y, Xtilde, Z, lambda=0, center.Z=T, scale.Z=T, w
   # change in v6 to add a try function
   GCV_effective.df <- tryCatch({
     invW <- solve(transW %*% W + temp, transW)
-    #thetahat <- inverse %*% t(W) %*% Ys
-    #thetahat <- invW %*% Ys
     thetahat <- invW %*% Y
     Yhat <- W %*% thetahat
-    #Yshat <- W %*% thetahat
-    #Yhat <- Yshat + mean(Y)
-    #H <-  W %*% inverse %*% t(W)
-    #GCV <- sum((Ys-Yshat)^2)/(n*(1-sum(diag(H))/n)^2)
     equivH <- invW %*% W         					# tr(H) = tr(equivH)
     effective.df <- mtrace(equivH)-1  			 	# -1 for intercept
-    #GCV <- sum((Ys-Yshat)^2)/(n*(1-effective.df/n)^2)
     GCV <- sum((Y-Yhat)^2)/(n*(1-effective.df/n)^2)
     return(list(GCV = GCV, effective.df = effective.df))
   },
@@ -306,19 +292,18 @@ ridge.select.linear <- function(Y, Xtilde, Z, lambda=0, center.Z=T, scale.Z=T, w
 
   })
 
-  #return(list(lambda=lambda, GCV = GCV, effective.df=effective.df))
   return(c(list(lambda = lambda), GCV_effective.df))
 }
 
 
-chooseridge.linear <- function(Y, Xtilde, Z, lambdastart=1e-20, lambdaend=sqrt(nrow(Y))/log(nrow(Y)), intervals=5, plot=F, file=NA, center.Z=T, scale.Z=T, weights.Z=NULL){
+chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=1e-20, lambdaend=sqrt(nrow(Y))/log(nrow(Y)), intervals=5, plot=F, file=NA, center.Z=T, scale.Z=T, weights.Z=NULL){
   # modified in v5
   # need lambdastart, lambdaend >=0, lambdastart <= lambdaend
   lambda <- c(exp(seq(log(lambdastart),log(lambdaend),length=intervals)))
 
   output <- c()
   for(ii in 1:length(lambda)){
-    temp <- ridge.select.linear(Y, Xtilde, Z, lambda[ii], center.Z, scale.Z, weights.Z)$GCV
+    temp <- ridge.select.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda[ii], center.Z, scale.Z, weights.Z)$GCV
     output <- c(output, temp)
     rm(temp)
   }
@@ -410,7 +395,6 @@ Get_Lambda <- function(K){
   # copied without modification from SKAT 0.71
 
   out.s <- eigen(K,symmetric=TRUE, only.values=T)
-  #print(out.s$values)
 
   lambda1 <- out.s$values
   IDX1<-which(lambda1 >= 0)
@@ -436,7 +420,7 @@ SKAT_davies <- function(q,lambda,h = rep(1,length(lambda)),delta = rep(0,length(
   if (length(h) != r) stop("lambda and h should have the same length!")
   if (length(delta) != r) stop("lambda and delta should have the same length!")
 
-  out <- .C("qfc",lambdas=as.double(lambda),noncentral=as.double(delta),df=as.integer(h),r=as.integer(r),sigma=as.double(sigma),q=as.double(q),lim=as.integer(lim),acc=as.double(acc),trace=as.double(rep(0,7)),ifault=as.integer(0),res=as.double(0), PACKAGE="iSKAT")
+  out <- .C("qfc",lambdas=as.double(lambda),noncentral=as.double(delta),df=as.integer(h),r=as.integer(r),sigma=as.double(sigma),q=as.double(q),lim=as.integer(lim),acc=as.double(acc),trace=as.double(rep(0,7)),ifault=as.integer(0),res=as.double(0), PACKAGE="iSKATtest")
 
   out$res <- 1 - out$res
 
