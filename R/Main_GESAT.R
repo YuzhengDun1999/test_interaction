@@ -209,6 +209,7 @@ GESAT <- function(Z, Y, E, X=NULL, ridge.penalty.factor=rep(1, ncol(Z)), lasso.s
 
   return(list(pvalue=iSKAT.out$pvalue, Is_converge=iSKAT.out$Is_converge,
               lambda=iSKAT.out$lambda, n.G.test=drop(ncol(Z)), n.GE.test=drop(ncol(V))))
+  #return(list(pvalue=iSKAT.out$pvalue, beta_lasso = iSKAT.out$beta_lasso, OLS = iSKAT.out$OLS))
 }
 
 

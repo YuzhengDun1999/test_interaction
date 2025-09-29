@@ -36,6 +36,7 @@ main_props = c(0.1, 0.2, 0.3)
 n_sims = 5000
 methods = c("OLS", "Ridge", "Lasso OLS minMSE", "Lasso OLS 1se", "Lasso ridge minMSE", "Lasso ridge 1se")
 
+library(dplyr)
 result <- tibble(n = integer(), p = integer(), sim = integer(), main_prop = numeric(), method = character(), pval = numeric())
 
 for (n in n_values) {
@@ -51,7 +52,7 @@ for (n in n_values) {
         beta_Z[1:as.integer(round(p * main_prop))] = 40
         Y = as.matrix(E) %*% beta_E + Z %*% beta_Z + rnorm(n)
         if (n > p){
-          OLS_p = iSKATtest::GESAT(Z, Y, E, ols = T, is_check_genotype = FALSE)$pvalue
+          OLS_p = iSKATtestSmallsample::GESAT(Z, Y, E, ols = T, is_check_genotype = FALSE)$pvalue
         } else{
           OLS_p = NA
         }
@@ -60,15 +61,15 @@ for (n in n_values) {
           tibble(
             n = n, p = p, sim = sim, main_prop = main_prop, method = methods,
             pval = c(OLS_p, # OLS
-                     iSKATtest::GESAT(Z, Y, E, nintervals=20, is_check_genotype = FALSE)$pvalue, # ridge
-                     iSKATtest::GESAT(Z, Y, E, lasso.ols = T, is_check_genotype = FALSE)$pvalue, #lasso ridge
-                     iSKATtest::GESAT(Z, Y, E, lasso.ols = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue, # lasso ridge select by 1se
-                     iSKATtest::GESAT(Z, Y, E, lasso.select = T, is_check_genotype = FALSE)$pvalue, # lasso ridge select by minMSE
-                     iSKATtest::GESAT(Z, Y, E, lasso.select = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue # lasso ridge select by 1se
+                     iSKATtestSmallsample::GESAT(Z, Y, E, lower = 1e-2, upper = 16, nintervals = 250, is_check_genotype = FALSE)$pvalue, # ridge
+                     iSKATtestSmallsample::GESAT(Z, Y, E, lower = 1e-2, upper = 16, nintervals = 250, lasso.ols = T, is_check_genotype = FALSE)$pvalue, #lasso ridge
+                     iSKATtestSmallsample::GESAT(Z, Y, E, lower = 1e-2, upper = 16, nintervals = 250, lasso.ols = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue, # lasso ridge select by 1se
+                     iSKATtestSmallsample::GESAT(Z, Y, E, lower = 1e-2, upper = 16, nintervals = 250, lasso.select = T, is_check_genotype = FALSE)$pvalue, # lasso ridge select by minMSE
+                     iSKATtestSmallsample::GESAT(Z, Y, E, lower = 1e-2, upper = 16, nintervals = 250, lasso.select = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue # lasso ridge select by 1se
             )
           )
         )
-        saveRDS(result, paste0("~/Documents/test_interaction/simulation_result/n", n, "_p", p, "_prop", main_prop, ".rds"))
+        #saveRDS(result, paste0("~/Documents/test_interaction/simulation_result/n", n, "_p", p, "_prop", main_prop, ".rds"))
       }
     }
   }

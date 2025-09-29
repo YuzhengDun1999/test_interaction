@@ -1,3 +1,5 @@
+#' @importFrom CompQuadForm davies
+#' @importFrom glmnet cv.glmnet
 # Change for October 4, 2019
 # Use tryCatch instead of try in ridge.select.linear when calling solve.
 
@@ -103,12 +105,11 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
     }
     Z <-  scale(Z, center=T, scale=scale.Z)
     if (lasso.select){
-      library(glmnet)
       lasso.fit = cv.glmnet(x = cbind(Xtilde, Z), y = Y, family = c("gaussian"),
                             alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
       beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
       ridge.penalty.factor = rep(1, ncol(Z))
-      ridge.penalty.factor[which(beta_lasso != 0)] = 0
+      ridge.penalty.factor[which(beta_lasso != 0)] = 0.0001
     }
     lambdahat <- chooseridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=lower, lambdaend=upper,
                                     intervals=nintervals, plot=plotGCV, file=plotfile,
@@ -137,61 +138,49 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
   }
 
   # Q <- t(Y-Yhat) %*% V %*% t(V) %*% (Y-Yhat)
-  Q1 <- t(Y-Yhat) %*% V
-  Q <- Q1 %*% t(Q1)
+  #Q1 <- t(Y-Yhat) %*% V
+  #Q <- Q1 %*% t(Q1)
 
 
   #varhat <- var(Y-Yhat)                             # Change in GxE-scoretest-v8.R
-  df1 <- sum(ridgemodel$W * t(ridgemodel$invW))      # Change in GxE-scoretest-v8.R
-  varhat <- var(Y-Yhat) * (n-1) / (n - df1)          # Change in GxE-scoretest-v8.R
+  #df1 <- sum(ridgemodel$W * t(ridgemodel$invW))      # Change in GxE-scoretest-v8.R
+  #varhat <- var(Y-Yhat) * (n-1) / (n - df1)          # Change in GxE-scoretest-v8.R
+  s2 = sum((Y - Yhat)^2)
+  
+  D0 = diag(n)
+  P0 = D0 - ridgemodel$W %*% ridgemodel$invW #### I-projection matrix
+  K = V %*% t(V)####### kernal matrix
+  PKP = P0 %*% K %*% P0
+  q = as.numeric(t(Y) %*% PKP %*% Y / s2)
+  A = PKP - q * P0 %*% P0
 
-  # R <- t(diag(n)-H) %*% V %*% t(V) %*% (diag(n)-H)
-  # R1 <- t(diag(n)-H) %*% V
-  # R <- R1 %*% t(R1)
-  #M1 <- t(V) - t(V) %*% W %*% inverse %*% t(W)
-  M1 <- t(V) - t(V) %*% ridgemodel$W %*% ridgemodel$invW     # W = ridgemodel$W = all variables under the null with appropriate scaling, centering, invW = inverse %*% t(W)
-  M2 <- M1 %*% t(M1)
-  M3 <- drop(varhat)*M2
+  #M1 <- t(V) - t(V) %*% ridgemodel$W %*% ridgemodel$invW     # W = ridgemodel$W = all variables under the null with appropriate scaling, centering, invW = inverse %*% t(W)
+  #M2 <- M1 %*% t(M1)
+  #M3 <- drop(varhat)*M2
 
   #---------------------------------------------------------------------------
   # p-value from non-central chi-square approximation
   #---------------------------------------------------------------------------
   if(type=="liu"){
-    M4 <- M3 %*% M3
-    kappa1 <-  mtrace(M3)	          # = tr(M3)
-    kappa2 <-  2*mtrace(M4)           # = 2 tr(M3 M3) = 2 tr(M4)
-    kappa3 <-  8*sum(M3 * t(M4))      # = 8 tr(M3 M3 M3) = 8 tr(M3 M4) = 8 sum(M3 * M4')
-    kappa4 <-  48*sum(M4 * t(M4))     # = 48 tr(M3 M3 M3 M3) = 48 tr(M4 M4) = 48 sum(M4 * M4')
-
-    approx2 <- noncentralapproxdirect(kappa2, kappa3, kappa4)
-    Q.Norm2 <-((Q - kappa1)/sqrt(kappa2))*approx2$sigmaX +  approx2$muX
-    pvalue <- pchisq(Q.Norm2, df=approx2$df, ncp = approx2$ncp,  lower.tail=F)
+    pvalue <- Liu.pval(0, A, Yhat)
     Is_converge <- 1
-
   }else{
 
     #---------------------------------------------------------------------------
     # p-value from davies
     #---------------------------------------------------------------------------
-    daviesout <- Get_PValue_GESAT(M3, Q)
+    daviesout <- Get_PValue_GESAT(A, Yhat)
     pvalue <- daviesout$p.value
     Is_converge <- daviesout$is_converge
 
     if(Is_converge<=0){
-      M4 <- M3 %*% M3
-      kappa1 <-  mtrace(M3)             # = tr(M3)
-      kappa2 <-  2*mtrace(M4)           # = 2 tr(M3 M3) = 2 tr(M4)
-      kappa3 <-  8*sum(M3 * t(M4))      # = 8 tr(M3 M3 M3) = 8 tr(M3 M4) = 8 sum(M3 * M4')
-      kappa4 <-  48*sum(M4 * t(M4))     # = 48 tr(M3 M3 M3 M3) = 48 tr(M4 M4) = 48 sum(M4 * M4')
-
-      approx2 <- noncentralapproxdirect(kappa2, kappa3, kappa4)
-      Q.Norm2 <-((Q - kappa1)/sqrt(kappa2))*approx2$sigmaX +  approx2$muX
-      pvalue <- pchisq(Q.Norm2, df=approx2$df, ncp = approx2$ncp,  lower.tail=F)
+      pvalue <- Liu.pval(0, A, Yhat)
     }
 
   }
 
   return(list(pvalue=pvalue, Is_converge=Is_converge, lambda=drop(lambdahat)))
+  #return(list(pvalue=pvalue, beta_lasso = beta_lasso, OLS = ridgemodel$thetahat))
 }
 
 
@@ -334,47 +323,27 @@ chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=1
 # NB: Functions common to both have same names in both scripts
 # NB: Common functions are identical in both GxE-scoretest-logistic-snpset-v19.R and GxE-scoretest-snpset-v5.R
 #-------------------------------------------------------------------------------------------------------
-Beta.Weights<-function(MAF,weights.beta){
-  # copied without modification from Beta.Weights() SKAT 0.71
-
-  n<-length(MAF)
-  weights<-rep(0,n)
-  IDX_0<-which(MAF == 0)
-  if(length(IDX_0) == n){
-    stop("No polymorphic SNPs")
-  } else if( length(IDX_0) == 0){
-    weights<-dbeta(MAF,weights.beta[1],weights.beta[2])
-  } else {
-    weights[-IDX_0]<-dbeta(MAF[-IDX_0],weights.beta[1],weights.beta[2])
-  }
-
-  #print(length(IDX_0))
-  #print(weights[-IDX_0])
-  return(weights)
-
-}
-
-
-Get_PValue_GESAT <- function(K,Q){
-  # copied without modification from GxE-scoretest-logistic-snpset-v20.R
-  # new in v5, helper function to get davies p-value
-  # modified from Get_PValue() from SKAT 0.71
-
-  lambda <- Get_Lambda(K)
-  out <- SKAT_davies(Q, lambda, acc=10^(-6))
+Get_PValue_GESAT <- function(A, Yhat, acc = 1e-6, lim=1e6){
+  
+  ee = eigen(A, symmetric = T)
+  idx0 = which(abs(ee$values) >= 1e-10)
+  lambda0 = ee$value[idx0]
+  U = ee$vectors[, idx0]
+  mu_norm = t(U) %*% Yhat
+  noncentralparam = mu_norm ^ 2
+  
+  out <- davies(0, lambda0, delta = noncentralparam[,1], acc = acc, lim = lim)
 
   p.val <- out$Qq
   is_converge <- 1
-
   # check p-value
-  if(p.val > 1 || p.val< 0 ){
-    p.val <- NA
+  if(p.val > 1 || p.val < 0 | out$ifault > 0){
+    p.val = NA
     is_converge <- -2
   }
 
-
   # check convergence
-  if(length(lambda) == 1){
+  if(length(lambda0) == 1){
     p.val <-  NA
     is_converge <- -1
   } else if(out$ifault != 0){
@@ -387,46 +356,21 @@ Get_PValue_GESAT <- function(K,Q){
 
 }
 
-
-Get_Lambda <- function(K){
-  # copied without modification from GxE-scoretest-logistic-snpset-v19.R except to include only.values=T in eigen()
-  # identical to Get_Lambda() in GxE-scoretest-logistic-snpset-v20.R
-  # new in v5, helper function to get davies p-value
-  # copied without modification from SKAT 0.71
-
-  out.s <- eigen(K,symmetric=TRUE, only.values=T)
-
-  lambda1 <- out.s$values
-  IDX1<-which(lambda1 >= 0)
-
-  # eigenvalue bigger than sum(eigenvalues)/1000
-  IDX2 <- which(lambda1 > mean(lambda1[IDX1])/100000)
-
-  if(length(IDX2) == 0){
-    stop("No Eigenvalue is bigger than 0!!")
-  }
-  lambda <- lambda1[IDX2]
-  lambda
-
+Liu.pval = function(Q, A, Yhat){
+  AA <- A %*% A
+  AAA = A %*% AA
+  AAAA = A %*% AAA
+  kappa1 <-  mtrace(A) + mtrace(t(Yhat) %*% A %*% Yhat)	          # = tr(M3)
+  kappa2 <-  2 * (mtrace(AA) + mtrace(t(Yhat) %*% AA %*% Yhat))           # = 2 tr(M3 M3) = 2 tr(M4)
+  kappa3 <-  8 * (mtrace(AAA) + mtrace(t(Yhat) %*% AAA %*% Yhat))      # = 8 tr(M3 M3 M3) = 8 tr(M3 M4) = 8 sum(M3 * M4')
+  kappa4 <-  48 * (mtrace(AAAA) + mtrace(t(Yhat) %*% AAAA %*% Yhat))     # = 48 tr(M3 M3 M3 M3) = 48 tr(M4 M4) = 48 sum(M4 * M4')
+  
+  approx2 <- noncentralapproxdirect(kappa2, kappa3, kappa4)
+  Q.Norm2 <-((Q - kappa1)/sqrt(kappa2))*approx2$sigmaX +  approx2$muX
+  pvalue <- pchisq(Q.Norm2, df=approx2$df, ncp = approx2$ncp,  lower.tail=F)
+  return(pvalue)
 }
 
-
-SKAT_davies <- function(q,lambda,h = rep(1,length(lambda)),delta = rep(0,length(lambda)),sigma=0,lim=10000,acc=0.0001) {
-  # copied without modification from GxE-scoretest-logistic-snpset-v19.R
-  # new in v5, helper function to get davies p-value
-  # copied without modification from SKAT 0.71
-
-  r <- length(lambda)
-  if (length(h) != r) stop("lambda and h should have the same length!")
-  if (length(delta) != r) stop("lambda and delta should have the same length!")
-
-  out <- .C("qfc",lambdas=as.double(lambda),noncentral=as.double(delta),df=as.integer(h),r=as.integer(r),sigma=as.double(sigma),q=as.double(q),lim=as.integer(lim),acc=as.double(acc),trace=as.double(rep(0,7)),ifault=as.integer(0),res=as.double(0), PACKAGE="iSKATtest")
-
-  out$res <- 1 - out$res
-
-  return(list(trace=out$trace,ifault=out$ifault,Qq=out$res))
-
-}
 
 
 qqplots <- function(pvalues, header = "Quantile-Quantile Plot of P-values", filename = "qqplot.png"){
