@@ -118,7 +118,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
     Yhat <- ridgemodel$Yhat
   }else{
     if (lasso.ols) {
-      library(glmnet)
+      #library(glmnet)
       lasso.fit = cv.glmnet(x = cbind(Xtilde, Z), y = Y, family = c("gaussian"),
                             alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
       beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
