@@ -1,3 +1,4 @@
+#' @export GESAT
 # Last Edited: October 4, 2019
 # suppressWarnings for call to cor(V,Z)
 
