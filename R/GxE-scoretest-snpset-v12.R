@@ -109,7 +109,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
                             alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
       beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
       ridge.penalty.factor = rep(1, ncol(Z))
-      ridge.penalty.factor[which(beta_lasso != 0)] = 0.0001
+      ridge.penalty.factor[which(beta_lasso != 0)] = 0.000001
     }
     lambdahat <- chooseridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=lower, lambdaend=upper,
                                     intervals=nintervals, plot=plotGCV, file=plotfile,
@@ -124,6 +124,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
       beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
       ridge.penalty.factor = rep(1, ncol(Z))
       ridge.penalty.factor[which(beta_lasso == 0)] = NaN
+      upper = 0.000001
     }
     lambdahat <- upper
     ridgemodel <- ridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda = lambdahat, center.Z=T, scale.Z=scale.Z, weights.Z=weights.Z, lasso.ols=lasso.ols)
