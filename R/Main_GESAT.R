@@ -27,7 +27,7 @@
 # v0.6 onwards allow for binary outcome
 
 GESAT <- function(Z, Y, E, X=NULL, ridge.penalty.factor=rep(1, ncol(Z)), lasso.select=F, lasso.criterion="lambda.min", lasso.ols=F, ols=F, type="davies",
-                  lower=1e-20, upper=sqrt(nrow(Y))/log(nrow(Y)), nintervals=5, plotGCV=FALSE, plotfile=NA, scale.Z=TRUE, weights.Z=NULL, weights.V=NULL,
+                  lower=NULL, upper=NULL, nintervals=5, plotGCV=FALSE, plotfile=NA, scale.Z=TRUE, weights.Z=NULL, weights.V=NULL,
                   out_type="C", impute.method = "fixed", is_check_genotype=TRUE, is_dosage=FALSE, missing_cutoff=0.15, SetID=NULL){
   # Z: genotype data
   # Y: outcome
@@ -72,7 +72,9 @@ GESAT <- function(Z, Y, E, X=NULL, ridge.penalty.factor=rep(1, ncol(Z)), lasso.s
   #-------------------------------------
   # check other arguments
   if(type!="davies"&&type!="liu") stop("type has to be either davies or liu")
-  if(lower<=0|upper<=0|lower>upper) stop("lower/upper has to be >0, lower<=upper")
+  if(is.null(lower) == FALSE && is.null(upper) == FALSE){
+    if(lower<=0|upper<=0|lower>upper) stop("lower/upper has to be >0, lower<=upper") 
+  }
   if(scale.Z==T & is.null(weights.Z)==F) print("Warning: since scale.Z=T, weights.Z are ignored! To use weights as weights.Z, set scale.Z=F")
 
 

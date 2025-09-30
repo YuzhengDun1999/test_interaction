@@ -66,7 +66,7 @@
 #
 #--------------------------------------------------------------------------------------------------------------
 GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, ncol(Z)), lasso.select=F, lasso.criterion="lambda.min", lasso.ols=F, ols=F, type="davies",
-                                lower=1e-20, upper=sqrt(nrow(Y))/log(nrow(Y)), nintervals=5, plotGCV=F, plotfile=NA, scale.Z=T, weights.Z=NULL, weights.V=NULL){
+                                lower=NULL, upper=NULL, nintervals=NULL, plotGCV=F, plotfile=NA, scale.Z=T, weights.Z=NULL, weights.V=NULL){
 
   # Y (n x 1 matrix):  continuous outcome variable
   # Xtilde (n x qtilde matrix): are the variables adjusted for (not penalized)
@@ -85,7 +85,6 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
   if(nrow(Z)!= nrow(Y)) stop("dimensions of Z and Y don't match")
   if(nrow(V)!= nrow(Y)) stop("dimensions of V and Y don't match")
   if(type!="davies"&&type!="liu") stop("type has to be either davies or liu")
-  if(lower<=0|upper<=0|lower>upper) stop("lower/upper has to be >0, lower<=upper")
   if(scale.Z==T & is.null(weights.Z)==F) print("Warning: since scale.Z=T, weights.Z are ignored! To use weights as weights.Z, set scale.Z=F")
   if(length(ridge.penalty.factor)!= ncol(Z)) stop("dimensions of penalty factors and Z don't match")
   
@@ -286,30 +285,24 @@ ridge.select.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambda=0, ce
 }
 
 
-chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=1e-20, lambdaend=sqrt(nrow(Y))/log(nrow(Y)), intervals=5, plot=F, file=NA, center.Z=T, scale.Z=T, weights.Z=NULL){
+chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=NULL, lambdaend=NULL, intervals=5, plot=F, file=NA, center.Z=T, scale.Z=T, weights.Z=NULL){
   # modified in v5
   # need lambdastart, lambdaend >=0, lambdastart <= lambdaend
-  lambda <- c(exp(seq(log(lambdastart),log(lambdaend),length=intervals)))
-
-  output <- c()
-  for(ii in 1:length(lambda)){
-    temp <- ridge.select.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda[ii], center.Z, scale.Z, weights.Z)$GCV
-    output <- c(output, temp)
-    rm(temp)
+  n <- nrow(Y)
+  if(is.null(weights.Z)==F & scale.Z==F){
+    Z <- t(t(Z) * (weights.Z))
   }
-  lambdafinal <- lambda[which.min(output)]
-
-  if(plot==T&is.na(file)==T){
-    plot(lambda, output, xlab="lambda", ylab="GCV")
-    abline(v=lambdafinal, col="red")
+  sd_y <- sqrt(var(Y) * (n - 1) / n)[1, 1]
+  W <- cbind(scale(Xtilde), scale(Z, center=center.Z, scale=scale.Z)) # doesn't matter if Xtilde is scaled or not
+  
+  if (is.null(lambdastart) == FALSE && is.null(lambdaend) == FALSE){
+    lambda <- c(exp(seq(log(lambdastart),log(lambdaend),length=intervals)))
+    lambda_glmnet = lambda * sd_y / n
+    fit_glmnet <- cv.glmnet(W, Y, alpha=0, lambda = lambda_glmnet, penalty.factor = c(rep(0, ncol(Xtilde)), ridge.penalty.factor), standardize = F)
+  } else{
+    fit_glmnet <- cv.glmnet(W, Y, alpha=0, penalty.factor = c(rep(0, ncol(Xtilde)), ridge.penalty.factor), standardize = F)
   }
-
-  if(plot==T&is.na(file)==F){
-    pdf(file)
-    plot(lambda, output, xlab="lambda", ylab="GCV")
-    abline(v=lambdafinal, col="red")
-    dev.off()
-  }
+  lambdafinal <- fit_glmnet$lambda.min * n / sd_y
 
   return(lambdafinal)
 }
