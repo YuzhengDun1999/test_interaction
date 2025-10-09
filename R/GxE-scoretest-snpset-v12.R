@@ -150,13 +150,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
   D0 = diag(n)
   P0 = D0 - ridgemodel$W %*% ridgemodel$invW #### I-projection matrix
   P0_square = P0 %*% P0
-  if (nrow(V) >= ncol(V)){
-    K = V %*% t(V)####### kernal matrix
-  } else{
-    Sigma_eig = eigs_sym(t(V)%*% P0_square %*% V, k = nrow(V))
-    eig_nonzero = sum(Sigma_eig$values >= 10^-6)
-    K = V %*% Sigma_eig$vectors[,1:eig_nonzero] %*% t(Sigma_eig$vectors[,1:eig_nonzero]) %*% t(V)
-  }
+  K = V %*% t(V)
   PKP = P0 %*% K %*% P0
   q = as.numeric(t(Y) %*% PKP %*% Y / s2)
   A = PKP - q * P0_square
