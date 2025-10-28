@@ -1,14 +1,55 @@
 ####### n vary from 50 to 400, p vary from 10 to 40
 ####### 5% genomic markers have true large effect
 set.seed(2025)
-n = 50; p = 20; main_prop = 0.05
+n = 50; p = 40; main_prop = 0.05
 E = as.matrix(data.frame(continuous = rnorm(n), binary = rbinom(n, 2, 0.5)))
 Z = matrix(rnorm(n * p), nrow = n, ncol = p)
 beta_E = c(1, 1)
 beta_Z = rep(0, p)
-beta_Z[1:as.integer(round(p * main_prop))] = rnorm(p * main_prop)
+#beta_Z[1:as.integer(round(p * main_prop))] = rnorm(p * main_prop)
+beta_Z[1:5] = 2
+beta_Z[6:40] = 0.2
 Y = as.matrix(E) %*% beta_E + Z %*% beta_Z + rnorm(n)
 library(iSKATtest)
+n_sims = 5000
+#methods = c("OLS", "Ridge", "Lasso OLS minMSE", "Lasso OLS 1se", "Lasso ridge minMSE", "Lasso ridge 1se")
+methods = c("OLS", "Ridge")
+
+library(dplyr)
+result <- tibble(n = integer(), p = integer(), sim = integer(), main_prop = numeric(), method = character(), pval = numeric())
+for (sim in 1:n_sims) {
+  set.seed(n + p + sim + main_prop * 10)
+  E = as.matrix(data.frame(continuous = rnorm(n), binary = rbinom(n, 2, 0.5)))
+  Z = matrix(rnorm(n * p), nrow = n, ncol = p)
+  beta_E = c(1, 2)
+  beta_Z = rep(0, p)
+  beta_Z[1:5] = 2
+  beta_Z[6:40] = 0.2
+  Y = as.matrix(E) %*% beta_E + Z %*% beta_Z + rnorm(n)
+  if (n > p){
+    OLS_p = iSKATtestSmallsample::GESAT(Z, Y, E, ols = T, is_check_genotype = FALSE)$pvalue
+  } else{
+    OLS_p = NA
+  }
+  result = bind_rows(
+    result,
+    tibble(
+      n = n, p = p, sim = sim, main_prop = main_prop, method = methods,
+      pval = c(OLS_p, # OLS
+               #iSKATtestSmallsample::GESAT(Z, Y, E, lower = 1e-2, upper = 16, nintervals = 250, lasso.select = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue, # lasso ridge select by 1se
+               #iSKATtest::GESAT(Z, Y, E, lower = 1e-6, nintervals = 5, is_check_genotype = FALSE)$pvalue, # ridge
+               iSKATtestSmallsample::GESAT(Z, Y, E, is_check_genotype = FALSE)$pvalue # ridge small sample correction
+               #iSKATtestSmallsample::GESAT(Z, Y, E, lasso.ols = T, is_check_genotype = FALSE)$pvalue, #lasso OLS
+               #iSKATtestSmallsample::GESAT(Z, Y, E, lasso.ols = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue, # lasso OLS select by 1se
+               #iSKATtestSmallsample::GESAT(Z, Y, E, lasso.select = T, is_check_genotype = FALSE)$pvalue, # lasso ridge select by minMSE
+               #iSKATtestSmallsample::GESAT(Z, Y, E, lasso.select = T, lasso.criterion = "lambda.1se", is_check_genotype = FALSE)$pvalue
+      )
+    )
+  )
+  #saveRDS(result, paste0("~/Documents/test_interaction/simulation_result/n", n, "_p", p, "_prop", main_prop, ".rds"))
+}
+result %>% group_by(n, p, method) %>% summarize(reject_rate = mean(pval < 0.05), .groups = "drop")
+
 
 ########### OLS
 iSKATtest::GESAT(Z, Y, E, ols = T, is_check_genotype = FALSE)

@@ -66,7 +66,7 @@
 #
 #--------------------------------------------------------------------------------------------------------------
 GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, ncol(Z)), lasso.select=F, lasso.criterion="lambda.min", lasso.ols=F, ols=F, type="davies",
-                                lower=NULL, upper=NULL, nintervals=NULL, plotGCV=F, plotfile=NA, scale.Z=T, weights.Z=NULL, weights.V=NULL){
+                                lower=NULL, upper=NULL, nintervals=NULL, exact = FALSE, plotGCV=F, plotfile=NA, scale.Z=T, weights.Z=NULL, weights.V=NULL){
 
   # Y (n x 1 matrix):  continuous outcome variable
   # Xtilde (n x qtilde matrix): are the variables adjusted for (not penalized)
@@ -108,7 +108,8 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
                             alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
       beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
       ridge.penalty.factor = rep(1, ncol(Z))
-      ridge.penalty.factor[which(beta_lasso != 0)] = 0.000001
+      ridge.penalty.factor[which(beta_lasso != 0)] = 1e-12
+      #ridge.penalty.factor[which(beta_lasso != 0)] = 0
     }
     lambdahat <- chooseridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=lower, lambdaend=upper,
                                     intervals=nintervals, plot=plotGCV, file=plotfile,
@@ -123,9 +124,14 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
       beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
       ridge.penalty.factor = rep(1, ncol(Z))
       ridge.penalty.factor[which(beta_lasso == 0)] = NaN
-      upper = 0.000001
+      upper = 1e-12
     }
     lambdahat <- upper
+    ######### debug
+    #ridge.penalty.factor = rep(1, ncol(Z))
+    #ridge.penalty.factor[1] = 0
+    
+    
     ridgemodel <- ridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda = lambdahat, center.Z=T, scale.Z=scale.Z, weights.Z=weights.Z, lasso.ols=lasso.ols)
     Yhat <- ridgemodel$Yhat
   }
@@ -155,6 +161,8 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
   q = as.numeric(t(Y) %*% PKP %*% Y / s2)
   A = PKP - q * P0_square
 
+  #ridgemodel <- ridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda = 0.001, center.Z=T, scale.Z=scale.Z, weights.Z=weights.Z, lasso.ols=lasso.ols)
+  Yhat <- ridgemodel$Yhat
   #M1 <- t(V) - t(V) %*% ridgemodel$W %*% ridgemodel$invW     # W = ridgemodel$W = all variables under the null with appropriate scaling, centering, invW = inverse %*% t(W)
   #M2 <- M1 %*% t(M1)
   #M3 <- drop(varhat)*M2
@@ -170,7 +178,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
     #---------------------------------------------------------------------------
     # p-value from davies
     #---------------------------------------------------------------------------
-    daviesout <- Get_PValue_GESAT(A, Yhat)
+    daviesout <- Get_PValue_GESAT(A, Yhat, exact = exact)
     pvalue <- daviesout$p.value
     Is_converge <- daviesout$is_converge
 
@@ -318,17 +326,20 @@ chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=N
 # NB: Functions common to both have same names in both scripts
 # NB: Common functions are identical in both GxE-scoretest-logistic-snpset-v19.R and GxE-scoretest-snpset-v5.R
 #-------------------------------------------------------------------------------------------------------
-Get_PValue_GESAT <- function(A, Yhat, acc = 1e-6, lim=1e6){
+Get_PValue_GESAT <- function(A, Yhat, acc = 1e-6, lim=1e6, exact = FALSE){
   
   ee = eigen(A, symmetric = T)
   idx0 = which(abs(ee$values) >= 1e-10)
   lambda0 = ee$value[idx0]
   U = ee$vectors[, idx0]
-  mu_norm = t(U) %*% Yhat
-  noncentralparam = mu_norm ^ 2
+  if (exact){
+    mu_norm = t(U) %*% Yhat
+    noncentralparam = mu_norm ^ 2
+    out <- davies(0, lambda0, delta = noncentralparam[,1], acc = acc, lim = lim)
+  } else{
+    out <- davies(0, lambda0, acc = acc, lim = lim)
+  }
   
-  out <- davies(0, lambda0, delta = noncentralparam[,1], acc = acc, lim = lim)
-
   p.val <- out$Qq
   is_converge <- 1
   # check p-value
