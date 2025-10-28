@@ -162,7 +162,7 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
   A = PKP - q * P0_square
 
   #ridgemodel <- ridge.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda = 0.001, center.Z=T, scale.Z=scale.Z, weights.Z=weights.Z, lasso.ols=lasso.ols)
-  Yhat <- ridgemodel$Yhat
+  #Yhat <- ridgemodel$Yhat
   #M1 <- t(V) - t(V) %*% ridgemodel$W %*% ridgemodel$invW     # W = ridgemodel$W = all variables under the null with appropriate scaling, centering, invW = inverse %*% t(W)
   #M2 <- M1 %*% t(M1)
   #M3 <- drop(varhat)*M2
