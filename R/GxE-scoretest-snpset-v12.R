@@ -303,7 +303,7 @@ chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=N
   }
   sd_y <- sqrt(var(Y) * (n - 1) / n)[1, 1]
   W <- cbind(scale(Xtilde), scale(Z, center=center.Z, scale=scale.Z)) # doesn't matter if Xtilde is scaled or not
-  
+
   if (is.null(lambdastart) == FALSE && is.null(lambdaend) == FALSE){
     lambda <- c(exp(seq(log(lambdastart),log(lambdaend),length=intervals)))
     lambda_glmnet = lambda * sd_y / n
@@ -315,6 +315,35 @@ chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=N
 
   return(lambdafinal)
 }
+
+# chooseridge.linear <- function(Y, Xtilde, Z, ridge.penalty.factor, lambdastart=1e-20, lambdaend=sqrt(nrow(Y))/log(nrow(Y)), intervals=5, plot=F, file=NA, center.Z=T, scale.Z=T, weights.Z=NULL){
+#   # modified in v5
+#   # need lambdastart, lambdaend >=0, lambdastart <= lambdaend
+#   lambda <- c(exp(seq(log(lambdastart),log(lambdaend),length=intervals)))
+#   
+#   output <- c()
+#   for(ii in 1:length(lambda)){
+#     temp <- ridge.select.linear(Y, Xtilde, Z, ridge.penalty.factor, lambda[ii], center.Z, scale.Z, weights.Z)$GCV
+#     output <- c(output, temp)
+#     rm(temp)
+#   }
+#   lambdafinal <- lambda[which.min(output)]
+#   
+#   if(plot==T&is.na(file)==T){
+#     plot(lambda, output, xlab="lambda", ylab="GCV")
+#     abline(v=lambdafinal, col="red")
+#   }
+#   
+#   if(plot==T&is.na(file)==F){
+#     pdf(file)
+#     plot(lambda, output, xlab="lambda", ylab="GCV")
+#     abline(v=lambdafinal, col="red")
+#     dev.off()
+#   }
+#   
+#   return(lambdafinal)
+# }
+
 
 #--------------------------------------------------------------------------------------------------------------
 # END: Functions specific to linear
