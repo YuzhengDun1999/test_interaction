@@ -117,9 +117,9 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
   Q <- Q1 %*% t(Q1)
 
 
-  #varhat <- var(Y-Yhat)                             # Change in GxE-scoretest-v8.R
-  df1 <- sum(ridgemodel$W * t(ridgemodel$invW))      # Change in GxE-scoretest-v8.R
-  varhat <- var(Y-Yhat) * (n-1) / (n - df1)          # Change in GxE-scoretest-v8.R
+  varhat <- var(Y-Yhat)                             # Change in GxE-scoretest-v8.R
+  #df1 <- sum(ridgemodel$W * t(ridgemodel$invW))      # Change in GxE-scoretest-v8.R
+  varhat <- var(Y-Yhat) * (n-1) / (n - ncol(ridgemodel$W))          # Change in GxE-scoretest-v8.R
 
   # R <- t(diag(n)-H) %*% V %*% t(V) %*% (diag(n)-H)
   # R1 <- t(diag(n)-H) %*% V
@@ -436,7 +436,7 @@ SKAT_davies <- function(q,lambda,h = rep(1,length(lambda)),delta = rep(0,length(
   if (length(h) != r) stop("lambda and h should have the same length!")
   if (length(delta) != r) stop("lambda and delta should have the same length!")
 
-  out <- .C("qfc",lambdas=as.double(lambda),noncentral=as.double(delta),df=as.integer(h),r=as.integer(r),sigma=as.double(sigma),q=as.double(q),lim=as.integer(lim),acc=as.double(acc),trace=as.double(rep(0,7)),ifault=as.integer(0),res=as.double(0), PACKAGE="iSKAT")
+  out <- .C("qfc",lambdas=as.double(lambda),noncentral=as.double(delta),df=as.integer(h),r=as.integer(r),sigma=as.double(sigma),q=as.double(q),lim=as.integer(lim),acc=as.double(acc),trace=as.double(rep(0,7)),ifault=as.integer(0),res=as.double(0), PACKAGE="iSKAT1")
 
   out$res <- 1 - out$res
 
