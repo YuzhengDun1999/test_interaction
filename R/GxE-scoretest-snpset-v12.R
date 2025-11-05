@@ -126,6 +126,13 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, ridge.penalty.factor=rep(1, nco
       ridge.penalty.factor[which(beta_lasso == 0)] = NaN
       upper = 1e-20
     }
+    if (lasso.select){
+      lasso.fit = cv.glmnet(x = cbind(Xtilde, Z), y = Y, family = c("gaussian"),
+                            alpha = 1, penalty.factor = c(rep(0, ncol(Xtilde)), rep(1, ncol(Z))))
+      beta_lasso = c(coef(lasso.fit, s = lasso.criterion)[-1])[(ncol(Xtilde) + 1):(ncol(Xtilde) + ncol(Z))]
+      ridge.penalty.factor = rep(1, ncol(Z))
+      ridge.penalty.factor[which(beta_lasso != 0)] = 1e-20
+    }
     lambdahat <- upper
     ######### debug
     #ridge.penalty.factor = rep(1, ncol(Z))
