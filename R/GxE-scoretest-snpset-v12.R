@@ -117,10 +117,10 @@ GxEscore.linear.GCV <- function(Y, Xtilde, Z, V, type="davies",
   Q <- Q1 %*% t(Q1)
 
 
-  varhat <- var(Y-Yhat)                             # Change in GxE-scoretest-v8.R
-  #df1 <- sum(ridgemodel$W * t(ridgemodel$invW))      # Change in GxE-scoretest-v8.R
-  varhat <- var(Y-Yhat) * (n-1) / (n - ncol(ridgemodel$W))          # Change in GxE-scoretest-v8.R
-
+  df1 <- sum(ridgemodel$W * t(ridgemodel$invW))      # Change in GxE-scoretest-v8.R
+  varhat <- var(Y-Yhat) * (n-1) / (n - df1)   
+  
+  
   # R <- t(diag(n)-H) %*% V %*% t(V) %*% (diag(n)-H)
   # R1 <- t(diag(n)-H) %*% V
   # R <- R1 %*% t(R1)
